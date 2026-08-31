@@ -4,7 +4,7 @@ API REST para gerenciamento de usuarios, desenvolvida com FastAPI, SQLAlchemy e 
 
 ## Tecnologias
 
-- Python 3.14+
+- Python 3.12+
 - FastAPI
 - SQLAlchemy
 - Pydantic Settings
