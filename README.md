@@ -1,88 +1,120 @@
-# API FastAPI
+# FastAPI Auth API
 
-API REST para gerenciamento de usuarios, desenvolvida com FastAPI, SQLAlchemy e SQLite.
+[![CI](https://github.com/afsilva3021/fastapi-auth-api/actions/workflows/ci.yml/badge.svg)](https://github.com/afsilva3021/fastapi-auth-api/actions/workflows/ci.yml)
+
+API REST de usuários com autenticação JWT, feita com **FastAPI**, **SQLAlchemy 2.0** e **Alembic**.
+O projeto segue uma arquitetura em camadas (router → service → repository) e tem testes de
+integração isolados, que não tocam em nenhum banco real.
+
+## Funcionalidades
+
+- Cadastro público de usuários e login com **OAuth2 password flow** (token JWT Bearer).
+- Rotas protegidas por token; cada usuário só altera ou remove a **própria** conta (403 caso contrário).
+- Senhas com hash **bcrypt**; a senha nunca aparece nas respostas.
+- Validação de entrada com Pydantic (e-mail normalizado, senha de 8 a 72 bytes, nome de 2 a 100 caracteres).
+- Erros de negócio tratados como exceções de domínio, convertidas para HTTP em um único lugar.
+- Login que não revela se um e-mail existe (mesma resposta e tempo parecido para os dois casos).
+- Paginação em `GET /usuarios/`, migrations com Alembic e suporte a SQLite e PostgreSQL.
 
 ## Tecnologias
 
-- Python 3.12+
-- FastAPI
-- SQLAlchemy
-- Pydantic Settings
-- Uvicorn
-- Pytest e HTTPX
-- uv
+Python 3.12+ · FastAPI · SQLAlchemy 2.0 · Alembic · Pydantic Settings · PyJWT · bcrypt ·
+PostgreSQL / SQLite · pytest + HTTPX · Ruff · uv · Docker · GitHub Actions
 
-## Requisitos
+## Estrutura
 
-- Python 3.14 ou superior
-- [uv](https://docs.astral.sh/uv/)
-
-## Instalacao
-
-Instale as dependencias, incluindo as de desenvolvimento:
-
-```bash
-uv sync --all-groups
 ```
-
-## Configuracao
-
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-DATABASE_URL=sqlite:///./db.sqlite3
-SECRET_KEY=troque-esta-chave-por-uma-segura
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+src/api/
+├── main.py            # app FastAPI, routers e handlers de erro
+├── core/              # config, segurança (bcrypt/JWT), dependências e exceções
+├── database/          # engine, sessão e Base do SQLAlchemy
+├── models/            # modelos ORM
+├── schemas/           # contratos de entrada e saída (Pydantic)
+├── repositories/      # acesso a dados
+├── services/          # regras de negócio
+└── routers/           # endpoints HTTP
+alembic/               # migrations
+tests/                 # testes de integração e unitários
 ```
-
-O arquivo `.env` contem informacoes locais e sensiveis, por isso nao deve ser versionado.
-
-## Executar a API
-
-Inicie o servidor de desenvolvimento:
-
-```bash
-uv run fastapi dev src/api/main.py
-```
-
-Com a API em execucao, acesse:
-
-- Documentacao interativa: `http://127.0.0.1:8000/docs`
-- Documentacao alternativa: `http://127.0.0.1:8000/redoc`
 
 ## Endpoints
 
-| Metodo | Rota | Descricao |
-| --- | --- | --- |
-| POST | `/usuarios/` | Cria um usuario |
-| GET | `/usuarios/` | Lista usuarios |
-| GET | `/usuarios/{usuario_id}` | Busca um usuario por ID |
-| PUT | `/usuarios/{usuario_id}` | Atualiza um usuario |
-| DELETE | `/usuarios/{usuario_id}` | Remove um usuario |
+| Método | Rota                | Auth | Descrição                                   |
+|--------|---------------------|------|---------------------------------------------|
+| POST   | `/usuarios/`        | não  | Cadastra um usuário                         |
+| POST   | `/auth/login`       | não  | Devolve o token (`username` = e-mail)       |
+| GET    | `/usuarios/me`      | sim  | Dados do usuário autenticado                |
+| GET    | `/usuarios/`        | sim  | Lista usuários (`skip`, `limit` até 100)    |
+| GET    | `/usuarios/{id}`    | sim  | Busca um usuário por ID                     |
+| PATCH  | `/usuarios/{id}`    | sim  | Atualiza parcialmente a própria conta       |
+| DELETE | `/usuarios/{id}`    | sim  | Remove a própria conta (204)                |
+| GET    | `/health`           | não  | Verificação de saúde                        |
 
-Exemplo de corpo para criar ou atualizar um usuario:
+Documentação interativa em `/docs` (use o botão **Authorize** com e-mail e senha).
 
-```json
-{
-	"nome": "Maria Silva",
-	"email": "maria@example.com",
-	"senha": "senha-segura"
-}
-```
+## Como rodar localmente
 
-## Testes
-
-Execute os testes com:
+Requisitos: Python 3.12+ e [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv run pytest
+uv sync --all-groups
+cp .env.example .env          # depois troque o SECRET_KEY
+uv run alembic upgrade head   # cria as tabelas
+uv run fastapi dev src/api/main.py
 ```
 
-O teste atual usa `fastapi.testclient.TestClient` para enviar requisicoes a aplicacao e validar o cadastro de 100 usuarios. Ele tambem exibe metricas de tempo, portanto funciona como teste de integracao simples com um pequeno benchmark. Como utiliza a configuracao da aplicacao, os cadastros sao persistidos no banco definido em `DATABASE_URL`.
-
-Para visualizar as metricas impressas pelo teste:
+Gere um `SECRET_KEY` seguro com:
 
 ```bash
-uv run pytest -s
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
+
+### Exemplo de uso
+
+```bash
+# cadastro
+curl -X POST localhost:8000/usuarios/ -H 'Content-Type: application/json' \
+  -d '{"nome": "Maria Silva", "email": "maria@example.com", "senha": "senha-segura-123"}'
+
+# login (o campo username recebe o e-mail)
+curl -X POST localhost:8000/auth/login \
+  -d 'username=maria@example.com&password=senha-segura-123'
+
+# rota protegida
+curl localhost:8000/usuarios/me -H "Authorization: Bearer <access_token>"
+```
+
+## Docker
+
+```bash
+export SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+docker compose up --build
+```
+
+Sobe a API em `http://localhost:8000` com PostgreSQL; as migrations rodam na inicialização.
+
+## Testes e qualidade
+
+```bash
+uv run pytest             # usa SQLite em memória, não precisa de .env
+uv run ruff check .
+uv run ruff format --check .
+```
+
+A pipeline do GitHub Actions roda lint, formatação e testes em Python 3.12 e 3.13.
+
+## Variáveis de ambiente
+
+| Variável                      | Padrão  | Descrição                                       |
+|-------------------------------|---------|-------------------------------------------------|
+| `DATABASE_URL`                | —       | Ex.: `sqlite:///./db.sqlite3` ou `postgresql+psycopg://...` |
+| `SECRET_KEY`                  | —       | Mínimo de 32 caracteres                         |
+| `ALGORITHM`                   | `HS256` | `HS256`, `HS384` ou `HS512`                     |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30`    | Validade do token                               |
+| `BCRYPT_ROUNDS`               | `12`    | Custo do bcrypt (4 a 16)                        |
+
+## Próximos passos
+
+- Refresh token e revogação de tokens.
+- Perfis de acesso (admin e usuário comum).
+- Limite de tentativas de login (rate limiting).

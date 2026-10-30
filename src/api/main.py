@@ -1,19 +1,20 @@
 from fastapi import FastAPI
 
-from api.database.base import Base
-from api.database.connection import engine
-
-from api.models.usuario import Usuario
-from api.routers import usuarios
-
-
-Base.metadata.create_all(bind=engine)
+from api.core.errors import register_exception_handlers
+from api.routers import auth, usuarios
 
 app = FastAPI(
-    title="API FastAPI",
-    version="1.0.0"
+    title="FastAPI Auth API",
+    description="API REST de usuarios com autenticacao JWT (OAuth2 password flow).",
+    version="1.0.0",
 )
 
-app.include_router(
-    usuarios.router
-)
+register_exception_handlers(app)
+
+app.include_router(auth.router)
+app.include_router(usuarios.router)
+
+
+@app.get("/health", tags=["Infra"], summary="Verifica se a API esta no ar")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
