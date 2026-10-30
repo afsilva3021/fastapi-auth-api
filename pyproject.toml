@@ -1,22 +1,22 @@
 [project]
-name = "api"
-version = "0.1.0"
-description = "Add your description here"
+name = "fastapi-auth-api"
+version = "1.0.0"
+description = "API REST de usuarios com autenticacao JWT, feita com FastAPI e SQLAlchemy."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.20.1",
+    "bcrypt>=5.0.0",
     "email-validator>=2.3.0",
     "fastapi[standard]>=0.141.1",
-    "passlib[bcrypt]>=1.7.4",
+    "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.15.0",
-    "python-jose[cryptography]>=3.5.0",
+    "pyjwt>=2.15.1",
     "sqlalchemy>=2.0.52",
-    "update>=0.0.1",
-    "uvicorn>=0.52.4",
 ]
 
-[project.scripts]
-api = "api:main"
+[tool.uv.build-backend]
+module-name = "api"
 
 [build-system]
 requires = ["uv_build>=0.12.7,<0.13.0"]
@@ -26,4 +26,17 @@ build-backend = "uv_build"
 dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
+    "ruff>=0.17.3",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

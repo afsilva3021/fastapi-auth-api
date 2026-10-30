@@ -1,44 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from typing import Annotated
 
-from api.database import get_db
-from api.models import Usuario
-from api.schemas import LoginRequest, Token
-from api.core.security import (verify_password, create_access_token)
+from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordRequestForm
 
-router = APIRouter (prefix = "/auth", tags = ['Autenticacão'])
+from api.core.dependencies import ServiceDep
+from api.core.security import create_access_token
+from api.schemas.auth import Token
 
-@router.post(
-    "/login",
-    response_model=Token
-)
+router = APIRouter(prefix="/auth", tags=["Autenticacao"])
+
+
+@router.post("/login", response_model=Token, summary="Autentica e devolve um token JWT")
 def login(
-    dados: LoginRequest,
-    db: Session = Depends(get_db)
-):
-
-    usuario = db.query(Usuario).filter(
-        Usuario.email == dados.email
-    ).first()
-
-    if not usuario:
-        raise HTTPException(
-            status_code=401,
-            detail="E-mail ou senha inválidos"
-        )
-
-    if not verify_password(
-        dados.senha,
-        usuario.senha
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="E-mail ou senha inválidos"
-        )
-
-    token = create_access_token({"sub": str(usuario.id), "email": usuario.email})
-
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
+    form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    service: ServiceDep,
+) -> Token:
+    """Use o e-mail no campo `username` (padrao OAuth2 password flow)."""
+    usuario = service.autenticar(form.username, form.password)
+    return Token(access_token=create_access_token(str(usuario.id)))
